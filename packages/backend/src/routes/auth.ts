@@ -1,10 +1,8 @@
-// packages/backend/src/routes/auth.ts
 import { Router, Request, Response } from 'express';
 import { auth } from '../config/firebase';
 
 const router = Router();
 
-// Middleware для перевірки токена
 export const verifyToken = async (req: Request, res: Response, next: Function) => {
   try {
     const authHeader = req.headers.authorization;
@@ -24,12 +22,10 @@ export const verifyToken = async (req: Request, res: Response, next: Function) =
   }
 };
 
-// Реєстрація користувача
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { email, password, displayName } = req.body;
+    const { email, password, displayName, gender, age } = req.body;
 
-    // Валідація
     if (!email || !password || !displayName) {
       return res.status(400).json({ 
         error: 'Email, пароль та ім\'я обов\'язкові' 
@@ -42,7 +38,6 @@ router.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    // Створення користувача через Firebase Admin
     const userRecord = await auth.createUser({
       email,
       password,
@@ -50,7 +45,20 @@ router.post('/register', async (req: Request, res: Response) => {
       emailVerified: false
     });
 
-    // Генерація custom token для автоматичного входу
+    try {
+      const { db } = require('../config/firebase');
+      await db.collection('users').doc(userRecord.uid).set({
+        uid: userRecord.uid,
+        email: userRecord.email,
+        displayName,
+        gender: gender || null,
+        age: age ? Number(age) : null,
+        createdAt: new Date().toISOString()
+      });
+    } catch (e) {
+      console.warn('Не вдалося записати профіль користувача у Firestore:', e);
+    }
+
     const customToken = await auth.createCustomToken(userRecord.uid);
 
     res.status(201).json({
@@ -81,11 +89,19 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 });
 
-// Отримання інформації про поточного користувача
 router.get('/me', verifyToken, async (req: Request, res: Response) => {
   try {
     const uid = (req as any).user.uid;
     const userRecord = await auth.getUser(uid);
+
+    let profile: any = {};
+    try {
+      const { db } = require('../config/firebase');
+      const doc = await db.collection('users').doc(uid).get();
+      if (doc.exists) profile = doc.data();
+    } catch (e) {
+      console.warn('Не вдалося прочитати профіль з Firestore:', e);
+    }
 
     res.json({
       user: {
@@ -94,7 +110,9 @@ router.get('/me', verifyToken, async (req: Request, res: Response) => {
         displayName: userRecord.displayName,
         emailVerified: userRecord.emailVerified,
         photoURL: userRecord.photoURL,
-        createdAt: userRecord.metadata.creationTime
+        createdAt: userRecord.metadata.creationTime,
+        gender: profile.gender || null,
+        age: profile.age || null
       }
     });
   } catch (error) {
@@ -103,19 +121,42 @@ router.get('/me', verifyToken, async (req: Request, res: Response) => {
   }
 });
 
-// Оновлення профілю користувача
 router.put('/profile', verifyToken, async (req: Request, res: Response) => {
   try {
     const uid = (req as any).user.uid;
-    const { displayName, photoURL } = req.body;
+    const { displayName, photoURL, gender, age } = req.body;
 
     const updateData: any = {};
     if (displayName) updateData.displayName = displayName;
     if (photoURL) updateData.photoURL = photoURL;
 
-    await auth.updateUser(uid, updateData);
+    if (Object.keys(updateData).length > 0) {
+      await auth.updateUser(uid, updateData);
+    }
+
+    try {
+      const { db } = require('../config/firebase');
+      const docRef = db.collection('users').doc(uid);
+      const toUpdate: any = {};
+      if (gender !== undefined) toUpdate.gender = gender;
+      if (age !== undefined) toUpdate.age = age !== null ? Number(age) : null;
+      if (displayName !== undefined) toUpdate.displayName = displayName;
+      if (photoURL !== undefined) toUpdate.photoURL = photoURL;
+      if (Object.keys(toUpdate).length > 0) await docRef.set(toUpdate, { merge: true });
+    } catch (e) {
+      console.warn('Не вдалося оновити профіль у Firestore:', e);
+    }
 
     const updatedUser = await auth.getUser(uid);
+
+    let profile: any = {};
+    try {
+      const { db } = require('../config/firebase');
+      const doc = await db.collection('users').doc(uid).get();
+      if (doc.exists) profile = doc.data();
+    } catch (e) {
+      console.warn('Не вдалося прочитати профіль з Firestore:', e);
+    }
 
     res.json({
       message: 'Профіль оновлено',
@@ -123,7 +164,9 @@ router.put('/profile', verifyToken, async (req: Request, res: Response) => {
         uid: updatedUser.uid,
         email: updatedUser.email,
         displayName: updatedUser.displayName,
-        photoURL: updatedUser.photoURL
+        photoURL: updatedUser.photoURL,
+        gender: profile.gender || null,
+        age: profile.age || null
       }
     });
   } catch (error) {
@@ -132,7 +175,6 @@ router.put('/profile', verifyToken, async (req: Request, res: Response) => {
   }
 });
 
-// Відправка листа для скидання паролю
 router.post('/forgot-password', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -141,28 +183,23 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email обов\'язковий' });
     }
 
-    // Генерація посилання для скидання паролю
     const link = await auth.generatePasswordResetLink(email);
 
-    // В реальному проекті тут буде відправка email
     console.log(`Password reset link for ${email}: ${link}`);
 
     res.json({
       message: 'Якщо email існує, лист з інструкціями буде надіслано',
-      // В продакшені не повертайте link!
       resetLink: link
     });
   } catch (error: any) {
     console.error('Помилка відновлення паролю:', error);
     
-    // З міркувань безпеки завжди повертаємо успіх
     res.json({
       message: 'Якщо email існує, лист з інструкціями буде надіслано'
     });
   }
 });
 
-// Видалення користувача
 router.delete('/delete-account', verifyToken, async (req: Request, res: Response) => {
   try {
     const uid = (req as any).user.uid;
@@ -175,7 +212,6 @@ router.delete('/delete-account', verifyToken, async (req: Request, res: Response
   }
 });
 
-// Перевірка валідності токена
 router.post('/verify-token', async (req: Request, res: Response) => {
   try {
     const { token } = req.body;

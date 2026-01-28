@@ -1,13 +1,14 @@
-// packages/frontend/src/components/Header.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useNavigate } from 'react-router-dom';
 import './Header.css';
 
 const Header: React.FC = () => {
   const { currentUser, logout } = useAuth();
+  const { currentSession, stopSession } = useAuth();
   const navigate = useNavigate();
   const [showMenu, setShowMenu] = useState(false);
+  const [elapsed, setElapsed] = useState('00:00:00');
 
   const handleLogout = async () => {
     try {
@@ -26,6 +27,28 @@ const Header: React.FC = () => {
       navigate('/');
   }
 
+  useEffect(() => {
+    let timer: number | undefined;
+    if (currentSession) {
+      const tick = () => {
+        const start = new Date(currentSession.startTime).getTime();
+        const diff = Date.now() - start;
+        const hrs = Math.floor(diff / 3600000).toString().padStart(2, '0');
+        const mins = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+        const secs = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+        setElapsed(`${hrs}:${mins}:${secs}`);
+      };
+      tick();
+      timer = window.setInterval(tick, 1000);
+    } else {
+      setElapsed('00:00:00');
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [currentSession]);
+
 
   return (
     <header className="app-header">
@@ -37,6 +60,15 @@ const Header: React.FC = () => {
         
         {currentUser && (
           <div className="header-right">
+            {currentSession && (
+              <div className="active-session">
+                <div className="session-info">
+                  <strong>{currentSession.name}</strong>
+                  <span className="session-timer">{elapsed}</span>
+                </div>
+                <button className="session-stop" onClick={() => stopSession()}>Stop</button>
+              </div>
+            )}
             <div 
               className="user-menu"
               onMouseEnter={() => setShowMenu(true)}

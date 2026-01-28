@@ -1,4 +1,3 @@
-// packages/frontend/src/components/Signup.tsx
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useNavigate, Link } from 'react-router-dom';
@@ -9,6 +8,8 @@ const Signup: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [gender, setGender] = useState('');
+  const [age, setAge] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -34,7 +35,7 @@ const Signup: React.FC = () => {
     try {
       setError('');
       setLoading(true);
-      await signup(email, password, displayName);
+      await signup(email, password, displayName, gender || undefined, age ? Number(age) : null);
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Помилка реєстрації');
@@ -60,6 +61,21 @@ const Signup: React.FC = () => {
               placeholder="Введіть ваше ім'я"
               disabled={loading}
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="gender">Стать</label>
+            <select id="gender" value={gender} onChange={(e)=>setGender(e.target.value)} disabled={loading}>
+              <option value="">Не вказано</option>
+              <option value="male">Чоловік</option>
+              <option value="female">Жінка</option>
+              <option value="other">Інше</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="age">Вік</label>
+            <input type="number" id="age" value={age} onChange={(e)=>setAge(e.target.value)} disabled={loading} min={0} />
           </div>
 
           <div className="form-group">

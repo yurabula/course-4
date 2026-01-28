@@ -1,4 +1,3 @@
-// packages/frontend/src/components/ForgotPassword.tsx
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { Link } from 'react-router-dom';

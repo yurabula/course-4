@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import Header from './Header.tsx';
 import './TrainingLibrary.css';
-import StartButton from "../assets/icons8-start-100.png"
+// @ts-ignore: allow importing image asset without type declaration
+import StartButton from "../assets/icons8-start-100.png";
 
 interface TrainingItem {
   id: string;
@@ -16,7 +17,7 @@ const TrainingLibrary: React.FC = () => {
   const [items, setItems] = useState<TrainingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { currentUser } = useAuth();
+  const { currentUser, startSession } = useAuth();
 
   const API_URL = '/api';
 
@@ -57,8 +58,8 @@ const TrainingLibrary: React.FC = () => {
     }
   };
 
-  const startTraining = () => {
-    console.log("test")
+  const startTraining = (item: TrainingItem) => {
+    startSession(item.id, item.name);
   }
 
   useEffect(() => {
@@ -88,7 +89,7 @@ const TrainingLibrary: React.FC = () => {
                   <div className="item-content">
                     <div className="item-image">
                         <img width="50" height="50" src={item.img} alt="walking--v1"/>   
-                        <img width="60" className="start-button" onClick={() => startTraining()} height="60" src={StartButton} alt="walking--v1"/>  
+                        <img width="60" className="start-button" onClick={() => startTraining(item)} height="60" src={StartButton} alt="walking--v1"/>  
                     </div>
                     <h3>{item.name}</h3>   
                   </div>
